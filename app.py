@@ -207,26 +207,23 @@ with st.sidebar:
                 st.cache_data.clear()
                 st.rerun()
             st.divider()
-            st.markdown(
-                f"<p style='color:{CHARCOAL};font-size:10px;margin-bottom:6px'>📂 Subir manualmente (override)</p>",
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>OTC Metrics</p>",
-                unsafe_allow_html=True,
-            )
-            uploaded = st.file_uploader(
-                "Chart_1/2/4/11 (.xlsx)", type=["xlsx"],
-                label_visibility="collapsed", key="upload_main",
-            )
-            st.markdown(
-                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>OTC Charts</p>",
-                unsafe_allow_html=True,
-            )
-            uploaded_tx = st.file_uploader(
-                "Chart_14 (.xlsx)", type=["xlsx"],
-                label_visibility="collapsed", key="upload_tx",
-            )
+            with st.expander("Subir archivo manualmente (override)", expanded=False):
+                st.markdown(
+                    f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>OTC Metrics</p>",
+                    unsafe_allow_html=True,
+                )
+                uploaded = st.file_uploader(
+                    "Chart_1/2/4/11 (.xlsx)", type=["xlsx"],
+                    label_visibility="collapsed", key="upload_main",
+                )
+                st.markdown(
+                    f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>OTC Charts</p>",
+                    unsafe_allow_html=True,
+                )
+                uploaded_tx = st.file_uploader(
+                    "Chart_14 (.xlsx)", type=["xlsx"],
+                    label_visibility="collapsed", key="upload_tx",
+                )
         else:
             # Drive falló → mostrar uploaders directamente
             st.warning("⚠️ Drive no disponible — sube el archivo manualmente")
