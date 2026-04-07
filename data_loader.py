@@ -78,12 +78,19 @@ def _drive_creds():
     return creds
 
 
-def download_drive_file(file_id: str, dest_path: str) -> bool:
+def download_drive_file(file_id: str, dest_path: str, mime_type: str = "") -> bool:
     """Descarga un archivo de Google Drive a dest_path. Retorna True si fue exitoso."""
     try:
         import requests as req
         creds = _drive_creds()
-        url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
+        if mime_type == "application/vnd.google-apps.spreadsheet":
+            # Google Sheets → exportar como xlsx
+            url = (
+                f"https://www.googleapis.com/drive/v3/files/{file_id}/export"
+                "?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
         r = req.get(url, headers={"Authorization": f"Bearer {creds.token}"},
                     stream=True, timeout=60)
         if r.status_code == 200:
@@ -109,25 +116,32 @@ def sync_drive_folder(folder_id: str,
     import requests as req
     import openpyxl
 
-    result = {"metrics": False, "charts": False}
+    result = {"metrics": False, "charts": False, "log": ""}
     try:
         creds = _drive_creds()
         headers = {"Authorization": f"Bearer {creds.token}"}
 
-        # Listar xlsx ordenados por fecha de modificación (más reciente primero)
-        q = f"'{folder_id}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' and trashed=false"
+        # Listar xlsx Y Google Sheets ordenados por fecha de modificación
+        q = (
+            f"'{folder_id}' in parents and trashed=false and ("
+            "mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or "
+            "mimeType='application/vnd.google-apps.spreadsheet'"
+            ")"
+        )
         list_url = "https://www.googleapis.com/drive/v3/files"
         resp = req.get(list_url, headers=headers,
                        params={"q": q, "orderBy": "modifiedTime desc",
-                               "fields": "files(id,name,modifiedTime)", "pageSize": 20},
+                               "fields": "files(id,name,mimeType,modifiedTime)", "pageSize": 20},
                        timeout=30)
         files = resp.json().get("files", [])
+        result["log"] = f"found:{[f['name'] for f in files]}"
 
         for f in files:
             if result["metrics"] and result["charts"]:
                 break
 
-            fname = f["name"].lower()
+            fname     = f["name"].lower()
+            fmime     = f.get("mimeType", "")
 
             # Detectar tipo por nombre de archivo (más confiable)
             name_is_metrics = any(k in fname for k in ["metric", "chart_metric"])
@@ -136,7 +150,7 @@ def sync_drive_folder(folder_id: str,
             # Si el nombre no da pistas, detectar por contenido de hojas
             if not name_is_metrics and not name_is_charts:
                 _tmp_inspect = f"/tmp/_drive_inspect_{f['id']}.xlsx"
-                if not download_drive_file(f["id"], _tmp_inspect):
+                if not download_drive_file(f["id"], _tmp_inspect, fmime):
                     continue
                 try:
                     xl = pd.ExcelFile(_tmp_inspect)
@@ -154,7 +168,7 @@ def sync_drive_folder(folder_id: str,
             # Descargar el archivo solo si vamos a usarlo
             _tmp = f"/tmp/_drive_inspect_{f['id']}.xlsx"
             if not os.path.exists(_tmp):
-                if not download_drive_file(f["id"], _tmp):
+                if not download_drive_file(f["id"], _tmp, fmime):
                     continue
 
             if is_metrics:
@@ -173,8 +187,8 @@ def sync_drive_folder(folder_id: str,
             except Exception:
                 pass
 
-    except Exception:
-        pass
+    except Exception as e:
+        result["log"] = f"ERROR:{type(e).__name__}:{e}"
 
     return result
 
