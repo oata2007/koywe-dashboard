@@ -776,15 +776,23 @@ def load_excel_dashboard(file_bytes: bytes) -> dict:
 
     # Chart_11: Daily volume by country
     df11 = _read(buf, "Chart_11", ["Fecha_str", "Volumen_local", "countryCode"])
-    df11["Fecha"] = pd.to_datetime(df11["Fecha_str"], format="%d-%b-%Y", errors="coerce")
-    df11["País"] = df11["countryCode"].map(COUNTRY_MAP_CODE).fillna(df11["countryCode"])
-    df11["Volumen_local"] = pd.to_numeric(df11["Volumen_local"], errors="coerce").fillna(0)
-    df11 = df11.dropna(subset=["Fecha"]).copy()
+    if not df11.empty:
+        df11["Fecha"] = pd.to_datetime(df11["Fecha_str"], format="%d-%b-%Y", errors="coerce")
+        df11["País"] = df11["countryCode"].map(COUNTRY_MAP_CODE).fillna(df11["countryCode"])
+        df11["Volumen_local"] = pd.to_numeric(df11["Volumen_local"], errors="coerce").fillna(0)
+        df11 = df11.dropna(subset=["Fecha"]).copy()
+
+    # Asegurar que todos los DataFrames tienen las columnas esperadas aunque estén vacíos
+    def _safe_select(df, cols):
+        for c in cols:
+            if c not in df.columns:
+                df[c] = pd.NA
+        return df[cols].reset_index(drop=True)
 
     return {
-        "vol_country": df1[["País", "Periodo", "Fecha", "Mes", "Año", "Volumen_USDT"]].reset_index(drop=True),
-        "clients": df_clients[["Cliente", "Periodo", "Fecha", "Mes", "Año", "Volumen_USD", "Spread", "Revenue", "Takerate_pct"]].reset_index(drop=True),
-        "daily": df11[["Fecha", "País", "Volumen_local"]].reset_index(drop=True),
+        "vol_country": _safe_select(df1, ["País", "Periodo", "Fecha", "Mes", "Año", "Volumen_USDT"]),
+        "clients":     _safe_select(df_clients, ["Cliente", "Periodo", "Fecha", "Mes", "Año", "Volumen_USD", "Spread", "Revenue", "Takerate_pct"]),
+        "daily":       _safe_select(df11, ["Fecha", "País", "Volumen_local"]),
     }
 
 
