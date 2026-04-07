@@ -132,16 +132,19 @@ def sync_drive_folder(folder_id: str,
             if not ok:
                 continue
 
-            # Inspeccionar hojas sin cargar todo el archivo
+            # Inspeccionar hojas y verificar que tengan datos reales
             try:
                 wb = openpyxl.load_workbook(_tmp, read_only=True)
                 sheets = wb.sheetnames
+                # Una hoja "tiene datos" si tiene más de 2 filas (header + al menos 1 dato)
+                chart1_has_data  = "Chart_1"  in sheets and (wb["Chart_1"].max_row  or 0) > 2
+                chart14_has_data = "Chart_14" in sheets and (wb["Chart_14"].max_row or 0) > 2
                 wb.close()
             except Exception:
                 continue
 
-            is_metrics = "Chart_1" in sheets and not result["metrics"]
-            is_charts  = "Chart_14" in sheets and not result["charts"]
+            is_metrics = chart1_has_data  and not result["metrics"]
+            is_charts  = chart14_has_data and not result["charts"]
 
             if is_metrics:
                 import shutil
