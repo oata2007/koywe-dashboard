@@ -27,6 +27,7 @@ def _subprocess_env() -> dict:
 from data_loader import (
     load_excel_dashboard, client_analysis_excel,
     load_client_names, load_weekly_summary, load_canal_monthly,
+    download_drive_file,
     MONTHS_ES, QUARTERS, COUNTRY_MAP_CODE,
 )
 
@@ -164,6 +165,33 @@ def chart_defaults(fig, height=260):
     return fig
 
 
+# ── Auto-descarga desde Google Drive ──────────────────────────────────────────
+_DRIVE_METRICS_ID  = st.secrets.get("DRIVE_METRICS_ID", "")
+_DRIVE_CHARTS_ID   = st.secrets.get("DRIVE_CHARTS_ID", "")
+_DRIVE_METRICS_TMP = "/tmp/koywe_drive_metrics.xlsx"
+_DRIVE_CHARTS_TMP  = "/tmp/koywe_drive_charts.xlsx"
+
+if _DRIVE_METRICS_ID and "drive_loaded" not in st.session_state:
+    with st.spinner("📡 Cargando datos desde Google Drive…"):
+        _ok_m = download_drive_file(_DRIVE_METRICS_ID, _DRIVE_METRICS_TMP)
+        _ok_c = (
+            download_drive_file(_DRIVE_CHARTS_ID, _DRIVE_CHARTS_TMP)
+            if _DRIVE_CHARTS_ID else False
+        )
+    st.session_state["drive_loaded"]  = _ok_m
+    st.session_state["drive_charts"]  = _ok_c
+    st.session_state["drive_metrics_id"] = _DRIVE_METRICS_ID
+    st.session_state["drive_charts_id"]  = _DRIVE_CHARTS_ID
+
+_drive_metrics_ready = (
+    st.session_state.get("drive_loaded", False)
+    and os.path.exists(_DRIVE_METRICS_TMP)
+)
+_drive_charts_ready = (
+    st.session_state.get("drive_charts", False)
+    and os.path.exists(_DRIVE_CHARTS_TMP)
+)
+
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(_logo_svg("#FFFFFF", height=28), unsafe_allow_html=True)
@@ -173,63 +201,116 @@ with st.sidebar:
     )
     st.divider()
 
-    st.markdown(
-        f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>📂 OTC Metrics</p>",
-        unsafe_allow_html=True,
-    )
-    uploaded = st.file_uploader(
-        "Exportación Mongo — Chart_1/2/4/11 (.xlsx)",
-        type=["xlsx"],
-        label_visibility="collapsed",
-        key="upload_main",
-    )
+    # Estado de Google Drive
+    if _DRIVE_METRICS_ID:
+        if _drive_metrics_ready:
+            st.success("📡 Datos cargados desde Drive", icon="✅")
+        else:
+            st.warning("⚠️ No se pudo conectar con Drive")
 
-    st.markdown(
-        f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>📂 OTC Charts</p>",
-        unsafe_allow_html=True,
-    )
-    uploaded_tx = st.file_uploader(
-        "Exportación Mongo — Chart_14 (.xlsx)",
-        type=["xlsx"],
-        label_visibility="collapsed",
-        key="upload_tx",
-    )
-
-    st.divider()
-
-    if uploaded:
-        if st.button("🔄 Recargar datos", use_container_width=True):
+        if st.button("🔄 Actualizar desde Drive", use_container_width=True):
+            # Forzar re-descarga borrando caché de sesión y archivos tmp
+            for _k in ["drive_loaded", "drive_charts", "drive_metrics_id", "drive_charts_id"]:
+                st.session_state.pop(_k, None)
+            for _p in [_DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP]:
+                if os.path.exists(_p):
+                    os.remove(_p)
             st.cache_data.clear()
             st.rerun()
-        st.caption(f"Actualizado: {datetime.now().strftime('%H:%M')}")
+
+        st.divider()
+        with st.expander("📂 Subir archivo manualmente (override)"):
+            st.markdown(
+                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>OTC Metrics</p>",
+                unsafe_allow_html=True,
+            )
+            uploaded = st.file_uploader(
+                "Chart_1/2/4/11 (.xlsx)",
+                type=["xlsx"],
+                label_visibility="collapsed",
+                key="upload_main",
+            )
+            st.markdown(
+                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>OTC Charts</p>",
+                unsafe_allow_html=True,
+            )
+            uploaded_tx = st.file_uploader(
+                "Chart_14 (.xlsx)",
+                type=["xlsx"],
+                label_visibility="collapsed",
+                key="upload_tx",
+            )
+    else:
+        # Sin Drive configurado → uploaders normales
+        st.markdown(
+            f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>📂 OTC Metrics</p>",
+            unsafe_allow_html=True,
+        )
+        uploaded = st.file_uploader(
+            "Exportación Mongo — Chart_1/2/4/11 (.xlsx)",
+            type=["xlsx"],
+            label_visibility="collapsed",
+            key="upload_main",
+        )
+        st.markdown(
+            f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>📂 OTC Charts</p>",
+            unsafe_allow_html=True,
+        )
+        uploaded_tx = st.file_uploader(
+            "Exportación Mongo — Chart_14 (.xlsx)",
+            type=["xlsx"],
+            label_visibility="collapsed",
+            key="upload_tx",
+        )
+        st.divider()
+        if uploaded:
+            if st.button("🔄 Recargar datos", use_container_width=True):
+                st.cache_data.clear()
+                st.rerun()
+            st.caption(f"Actualizado: {datetime.now().strftime('%H:%M')}")
 
 
 # ── Load data ──────────────────────────────────────────────────────────────────
-if not uploaded:
+# Resolver fuente de datos: upload manual tiene prioridad sobre Drive
+_has_metrics = uploaded is not None or _drive_metrics_ready
+_has_charts  = (uploaded_tx is not None
+                or _drive_charts_ready
+                or os.path.exists("/tmp/koywe_chart14.xlsx"))
+
+if not _has_metrics:
     col_center = st.columns([1, 2, 1])[1]
     with col_center:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown(_logo_svg(KOYWE_GREEN, height=40), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-        st.info("📂 **Sube el archivo de exportación** desde el panel izquierdo para cargar el dashboard.")
+        if _DRIVE_METRICS_ID:
+            st.error("❌ No se pudo descargar el archivo de métricas desde Drive. Revisa que el archivo esté compartido con la service account.")
+        else:
+            st.info("📂 **Sube el archivo de exportación** desde el panel izquierdo para cargar el dashboard.")
     st.stop()
 
 @st.cache_data(show_spinner=False)
 def cached_load(file_bytes: bytes) -> dict:
     return load_excel_dashboard(file_bytes)
 
-with st.spinner("Cargando datos…"):
-    file_bytes = uploaded.read()
-    data = cached_load(file_bytes)
-
-# Guardar archivo principal en disco para slack_reporter.py
-_tmp_chart = "/tmp/koywe_current_chart.xlsx"
-if not os.path.exists(_tmp_chart) or "chart_file_saved" not in st.session_state:
+if uploaded is not None:
+    # Upload manual — tiene prioridad
+    with st.spinner("Cargando datos…"):
+        file_bytes = uploaded.read()
+        data = cached_load(file_bytes)
+    # Guardar para slack_reporter.py
+    _tmp_chart = "/tmp/koywe_current_chart.xlsx"
     with open(_tmp_chart, "wb") as _f:
         _f.write(file_bytes)
-    st.session_state["chart_file_saved"] = True
+else:
+    # Datos desde Drive
+    _tmp_chart = _DRIVE_METRICS_TMP
+    with st.spinner("Procesando datos…"):
+        with open(_DRIVE_METRICS_TMP, "rb") as _f:
+            file_bytes = _f.read()
+        data = cached_load(file_bytes)
 
-# Archivo de transacciones (Chart_14) — uploader obligatorio
+# Resolver fuente de Chart_14 (canales)
 _tmp_tx = "/tmp/koywe_chart14.xlsx"
 if uploaded_tx is not None:
     _tx_bytes = uploaded_tx.read()
@@ -239,10 +320,12 @@ if uploaded_tx is not None:
         st.session_state["tx_file_saved"] = True
         st.session_state["tx_name"] = uploaded_tx.name
     WEEKLY_PATH = _tmp_tx
+elif _drive_charts_ready:
+    WEEKLY_PATH = _DRIVE_CHARTS_TMP
 elif os.path.exists(_tmp_tx):
-    WEEKLY_PATH = _tmp_tx  # archivo ya guardado en esta sesión
+    WEEKLY_PATH = _tmp_tx
 else:
-    WEEKLY_PATH = ""  # sin archivo disponible
+    WEEKLY_PATH = ""
 
 vol_country = data["vol_country"]   # País, Periodo, Fecha, Mes, Año, Volumen_USDT
 clients_all = data["clients"]       # Cliente, Periodo, Fecha, Mes, Año, Volumen_USD, Spread, Revenue, Takerate_pct

@@ -65,6 +65,40 @@ def _get_gc():
     return gspread.authorize(creds)
 
 
+def download_drive_file(file_id: str, dest_path: str) -> bool:
+    """
+    Descarga un archivo de Google Drive a dest_path usando la service account.
+    El archivo en Drive debe estar compartido con el email de la service account.
+    Retorna True si la descarga fue exitosa.
+    """
+    try:
+        import requests as req
+        from google.auth.transport.requests import Request as GRequest
+
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(
+            creds_dict,
+            scopes=["https://www.googleapis.com/auth/drive.readonly"],
+        )
+        creds.refresh(GRequest())
+
+        url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
+        r = req.get(
+            url,
+            headers={"Authorization": f"Bearer {creds.token}"},
+            stream=True,
+            timeout=60,
+        )
+        if r.status_code == 200:
+            with open(dest_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=32768):
+                    f.write(chunk)
+            return True
+        return False
+    except Exception:
+        return False
+
+
 # ── Raw sheet loader ──────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=300, show_spinner=False)
