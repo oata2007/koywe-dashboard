@@ -124,30 +124,37 @@ def sync_drive_folder(folder_id: str,
 
         for f in files:
             if result["metrics"] and result["charts"]:
-                break  # Ya tenemos los dos, no seguir descargando
+                break
 
-            # Descargar a un tmp temporal para inspeccionar
-            _tmp = f"/tmp/_drive_inspect_{f['id']}.xlsx"
-            ok = download_drive_file(f["id"], _tmp)
-            if not ok:
+            fname = f["name"].lower()
+
+            # Detectar tipo por nombre de archivo (más confiable)
+            name_is_metrics = any(k in fname for k in ["metric", "chart_metric"])
+            name_is_charts  = any(k in fname for k in ["transaction", "chart_14", "chart14"])
+
+            # Si el nombre no da pistas, detectar por contenido de hojas
+            if not name_is_metrics and not name_is_charts:
+                _tmp_inspect = f"/tmp/_drive_inspect_{f['id']}.xlsx"
+                if not download_drive_file(f["id"], _tmp_inspect):
+                    continue
+                try:
+                    xl = pd.ExcelFile(_tmp_inspect)
+                    name_is_metrics = "Chart_1"  in xl.sheet_names
+                    name_is_charts  = "Chart_14" in xl.sheet_names
+                except Exception:
+                    pass
+
+            is_metrics = name_is_metrics and not result["metrics"]
+            is_charts  = name_is_charts  and not result["charts"]
+
+            if not is_metrics and not is_charts:
                 continue
 
-            # Detectar tipo de archivo leyendo las primeras filas con pandas
-            chart1_has_data  = False
-            chart14_has_data = False
-            try:
-                xl = pd.ExcelFile(_tmp)
-                if "Chart_1" in xl.sheet_names:
-                    df_check = xl.parse("Chart_1", header=1, nrows=3)
-                    chart1_has_data = len(df_check) > 0
-                if "Chart_14" in xl.sheet_names:
-                    df_check = xl.parse("Chart_14", header=1, nrows=3)
-                    chart14_has_data = len(df_check) > 0
-            except Exception:
-                pass
-
-            is_metrics = chart1_has_data  and not result["metrics"]
-            is_charts  = chart14_has_data and not result["charts"]
+            # Descargar el archivo solo si vamos a usarlo
+            _tmp = f"/tmp/_drive_inspect_{f['id']}.xlsx"
+            if not os.path.exists(_tmp):
+                if not download_drive_file(f["id"], _tmp):
+                    continue
 
             if is_metrics:
                 import shutil
