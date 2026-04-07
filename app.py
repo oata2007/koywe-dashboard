@@ -195,142 +195,48 @@ with st.sidebar:
     )
     st.divider()
 
+    uploaded    = None
+    uploaded_tx = None
+
     # Estado de Google Drive
-    if _DRIVE_FOLDER_ID:
-        if st.session_state.get("drive_sync_log"):
-            st.caption(f"🔍 {st.session_state['drive_sync_log']}")
-        if _drive_metrics_ready:
-            st.success("📡 Datos desde GH", icon="✅")
-            if st.button("🔄 Actualizar desde GH", use_container_width=True):
-                for _k in ["drive_loaded", "drive_charts"]:
-                    st.session_state.pop(_k, None)
-                for _p in [_DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP]:
-                    if os.path.exists(_p):
-                        os.remove(_p)
-                st.cache_data.clear()
-                st.rerun()
-            st.divider()
-            with st.expander("Subir archivo manualmente (override)", expanded=False):
-                st.markdown(
-                    f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>OTC Metrics</p>",
-                    unsafe_allow_html=True,
-                )
-                uploaded = st.file_uploader(
-                    "Chart_1/2/4/11 (.xlsx)", type=["xlsx"],
-                    label_visibility="collapsed", key="upload_main",
-                )
-                st.markdown(
-                    f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>OTC Charts</p>",
-                    unsafe_allow_html=True,
-                )
-                uploaded_tx = st.file_uploader(
-                    "Chart_14 (.xlsx)", type=["xlsx"],
-                    label_visibility="collapsed", key="upload_tx",
-                )
-        else:
-            # Drive falló → mostrar uploaders directamente
-            st.warning("⚠️ Drive no disponible — sube el archivo manualmente")
-            st.markdown(
-                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>📂 OTC Metrics</p>",
-                unsafe_allow_html=True,
-            )
-            uploaded = st.file_uploader(
-                "Exportación Mongo — Chart_1/2/4/11 (.xlsx)", type=["xlsx"],
-                label_visibility="collapsed", key="upload_main",
-            )
-            st.markdown(
-                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>📂 OTC Charts</p>",
-                unsafe_allow_html=True,
-            )
-            uploaded_tx = st.file_uploader(
-                "Exportación Mongo — Chart_14 (.xlsx)", type=["xlsx"],
-                label_visibility="collapsed", key="upload_tx",
-            )
+    if st.session_state.get("drive_sync_log"):
+        st.caption(f"🔍 {st.session_state['drive_sync_log']}")
+    if _drive_metrics_ready:
+        st.success("📡 Datos desde GH", icon="✅")
     else:
-        # Sin Drive configurado → uploaders normales
-        st.markdown(
-            f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>📂 OTC Metrics</p>",
-            unsafe_allow_html=True,
-        )
-        uploaded = st.file_uploader(
-            "Exportación Mongo — Chart_1/2/4/11 (.xlsx)",
-            type=["xlsx"],
-            label_visibility="collapsed",
-            key="upload_main",
-        )
-        st.markdown(
-            f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>📂 OTC Charts</p>",
-            unsafe_allow_html=True,
-        )
-        uploaded_tx = st.file_uploader(
-            "Exportación Mongo — Chart_14 (.xlsx)",
-            type=["xlsx"],
-            label_visibility="collapsed",
-            key="upload_tx",
-        )
-        st.divider()
-        if uploaded:
-            if st.button("🔄 Recargar datos", use_container_width=True):
-                st.cache_data.clear()
-                st.rerun()
-            st.caption(f"Actualizado: {datetime.now().strftime('%H:%M')}")
+        st.warning("⚠️ No se pudo conectar con GH")
+    if st.button("🔄 Actualizar desde GH", use_container_width=True):
+        for _k in ["drive_loaded", "drive_charts", "drive_sync_log"]:
+            st.session_state.pop(_k, None)
+        for _p in [_DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP]:
+            if os.path.exists(_p):
+                os.remove(_p)
+        st.cache_data.clear()
+        st.rerun()
 
 
 # ── Load data ──────────────────────────────────────────────────────────────────
-# Resolver fuente de datos: upload manual tiene prioridad sobre Drive
-_has_metrics = uploaded is not None or _drive_metrics_ready
-_has_charts  = (uploaded_tx is not None
-                or _drive_charts_ready
-                or os.path.exists("/tmp/koywe_chart14.xlsx"))
-
-if not _has_metrics:
+if not _drive_metrics_ready:
     col_center = st.columns([1, 2, 1])[1]
     with col_center:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown(_logo_svg(KOYWE_GREEN, height=40), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-        st.info("📂 **Sube el archivo de exportación** desde el panel izquierdo para cargar el dashboard.")
-        if _DRIVE_FOLDER_ID:
-            st.caption("⚠️ La descarga desde Drive falló. Sube el archivo manualmente o revisa que la carpeta esté compartida con la service account.")
+        st.warning("⚠️ No se pudo conectar con Google Drive. Usa el botón **Actualizar desde GH** en el panel izquierdo.")
     st.stop()
 
 @st.cache_data(show_spinner=False)
 def cached_load(file_bytes: bytes) -> dict:
     return load_excel_dashboard(file_bytes)
 
-if uploaded is not None:
-    # Upload manual — tiene prioridad
-    with st.spinner("Cargando datos…"):
-        file_bytes = uploaded.read()
-        data = cached_load(file_bytes)
-    # Guardar para slack_reporter.py
-    _tmp_chart = "/tmp/koywe_current_chart.xlsx"
-    with open(_tmp_chart, "wb") as _f:
-        _f.write(file_bytes)
-else:
-    # Datos desde Drive
-    _tmp_chart = _DRIVE_METRICS_TMP
-    with st.spinner("Procesando datos…"):
-        with open(_DRIVE_METRICS_TMP, "rb") as _f:
-            file_bytes = _f.read()
-        data = cached_load(file_bytes)
+_tmp_chart = _DRIVE_METRICS_TMP
+with st.spinner("Procesando datos…"):
+    with open(_DRIVE_METRICS_TMP, "rb") as _f:
+        file_bytes = _f.read()
+    data = cached_load(file_bytes)
 
-# Resolver fuente de Chart_14 (canales)
-_tmp_tx = "/tmp/koywe_chart14.xlsx"
-if uploaded_tx is not None:
-    _tx_bytes = uploaded_tx.read()
-    if "tx_file_saved" not in st.session_state or st.session_state.get("tx_name") != uploaded_tx.name:
-        with open(_tmp_tx, "wb") as _f:
-            _f.write(_tx_bytes)
-        st.session_state["tx_file_saved"] = True
-        st.session_state["tx_name"] = uploaded_tx.name
-    WEEKLY_PATH = _tmp_tx
-elif _drive_charts_ready:
-    WEEKLY_PATH = _DRIVE_CHARTS_TMP
-elif os.path.exists(_tmp_tx):
-    WEEKLY_PATH = _tmp_tx
-else:
-    WEEKLY_PATH = ""
+# Chart_14 desde Drive
+WEEKLY_PATH = _DRIVE_CHARTS_TMP if _drive_charts_ready else ""
 
 vol_country = data["vol_country"]   # País, Periodo, Fecha, Mes, Año, Volumen_USDT
 clients_all = data["clients"]       # Cliente, Periodo, Fecha, Mes, Año, Volumen_USD, Spread, Revenue, Takerate_pct
