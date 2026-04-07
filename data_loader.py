@@ -740,10 +740,19 @@ def load_excel_dashboard(file_bytes: bytes) -> dict:
 
     buf = io.BytesIO(file_bytes)
 
+    def _parse_periodo(series: pd.Series) -> pd.Series:
+        """Parsea fechas en múltiples formatos: 'Feb-2026', 'Feb 2026', '2026-02', datetime, etc."""
+        for fmt in ["%b-%Y", "%b %Y", "%Y-%m", "%m-%Y", "%B-%Y", "%B %Y"]:
+            parsed = pd.to_datetime(series, format=fmt, errors="coerce")
+            if parsed.notna().sum() > 0:
+                return parsed
+        # Último recurso: inferir formato automáticamente
+        return pd.to_datetime(series, errors="coerce", dayfirst=False)
+
     # Chart_1: Volume USDT by country/month
     df1 = _read(buf, "Chart_1", ["Volumen_USDT", "Periodo", "countryCode"])
     if not df1.empty:
-        df1["Fecha"] = pd.to_datetime(df1["Periodo"], format="%b-%Y", errors="coerce")
+        df1["Fecha"] = _parse_periodo(df1["Periodo"])
         df1["País"] = df1["countryCode"].map(COUNTRY_MAP_CODE).fillna(df1["countryCode"])
         df1["Mes"] = df1["Fecha"].dt.month
         df1["Año"] = df1["Fecha"].dt.year
@@ -753,7 +762,7 @@ def load_excel_dashboard(file_bytes: bytes) -> dict:
     # Chart_2: Volume by client/month
     df2 = _read(buf, "Chart_2", ["Volumen_USD", "Periodo", "Cliente"])
     if not df2.empty:
-        df2["Fecha"] = pd.to_datetime(df2["Periodo"], format="%b-%Y", errors="coerce")
+        df2["Fecha"] = _parse_periodo(df2["Periodo"])
         df2["Mes"] = df2["Fecha"].dt.month
         df2["Año"] = df2["Fecha"].dt.year
         df2 = df2.dropna(subset=["Fecha", "Volumen_USD"]).copy()
