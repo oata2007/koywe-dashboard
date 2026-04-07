@@ -770,8 +770,9 @@ def load_excel_dashboard(file_bytes: bytes) -> dict:
         on=["Cliente", "Periodo"],
         how="left",
     )
-    df_clients["Spread"] = df_clients["Spread"].fillna(0)
-    df_clients["Revenue"] = (df_clients["Volumen_USD"] * df_clients["Spread"]).round(2)
+    df_clients["Spread"]      = pd.to_numeric(df_clients["Spread"],      errors="coerce").fillna(0)
+    df_clients["Volumen_USD"] = pd.to_numeric(df_clients["Volumen_USD"], errors="coerce").fillna(0)
+    df_clients["Revenue"]     = (df_clients["Volumen_USD"] * df_clients["Spread"]).round(2)
     df_clients["Takerate_pct"] = (df_clients["Spread"] * 100).round(4)
 
     # Chart_11: Daily volume by country
