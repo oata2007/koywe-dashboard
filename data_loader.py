@@ -723,30 +723,41 @@ def load_excel_dashboard(file_bytes: bytes) -> dict:
     """Load aggregated dashboard data from Mongo Excel export (Chart_1/2/4/11)."""
     def _read(buf, sheet, cols):
         buf.seek(0)
-        df = pd.read_excel(buf, sheet_name=sheet, header=1)
+        try:
+            df = pd.read_excel(buf, sheet_name=sheet, header=1)
+        except Exception:
+            return pd.DataFrame(columns=cols)
+        if df.empty or len(df.columns) < len(cols):
+            return pd.DataFrame(columns=cols)
         # Rename columns by position
         rename = {old: new for old, new in zip(df.columns, cols)}
         df = df.rename(columns=rename)
+        # Verificar que las columnas esperadas existen
+        for c in cols:
+            if c not in df.columns:
+                return pd.DataFrame(columns=cols)
         return df
 
     buf = io.BytesIO(file_bytes)
 
     # Chart_1: Volume USDT by country/month
     df1 = _read(buf, "Chart_1", ["Volumen_USDT", "Periodo", "countryCode"])
-    df1["Fecha"] = pd.to_datetime(df1["Periodo"], format="%b-%Y", errors="coerce")
-    df1["País"] = df1["countryCode"].map(COUNTRY_MAP_CODE).fillna(df1["countryCode"])
-    df1["Mes"] = df1["Fecha"].dt.month
-    df1["Año"] = df1["Fecha"].dt.year
-    df1 = df1.dropna(subset=["Fecha", "Volumen_USDT"]).copy()
-    df1["Volumen_USDT"] = pd.to_numeric(df1["Volumen_USDT"], errors="coerce").fillna(0)
+    if not df1.empty:
+        df1["Fecha"] = pd.to_datetime(df1["Periodo"], format="%b-%Y", errors="coerce")
+        df1["País"] = df1["countryCode"].map(COUNTRY_MAP_CODE).fillna(df1["countryCode"])
+        df1["Mes"] = df1["Fecha"].dt.month
+        df1["Año"] = df1["Fecha"].dt.year
+        df1 = df1.dropna(subset=["Fecha", "Volumen_USDT"]).copy()
+        df1["Volumen_USDT"] = pd.to_numeric(df1["Volumen_USDT"], errors="coerce").fillna(0)
 
     # Chart_2: Volume by client/month
     df2 = _read(buf, "Chart_2", ["Volumen_USD", "Periodo", "Cliente"])
-    df2["Fecha"] = pd.to_datetime(df2["Periodo"], format="%b-%Y", errors="coerce")
-    df2["Mes"] = df2["Fecha"].dt.month
-    df2["Año"] = df2["Fecha"].dt.year
-    df2 = df2.dropna(subset=["Fecha", "Volumen_USD"]).copy()
-    df2["Volumen_USD"] = pd.to_numeric(df2["Volumen_USD"], errors="coerce").fillna(0)
+    if not df2.empty:
+        df2["Fecha"] = pd.to_datetime(df2["Periodo"], format="%b-%Y", errors="coerce")
+        df2["Mes"] = df2["Fecha"].dt.month
+        df2["Año"] = df2["Fecha"].dt.year
+        df2 = df2.dropna(subset=["Fecha", "Volumen_USD"]).copy()
+        df2["Volumen_USD"] = pd.to_numeric(df2["Volumen_USD"], errors="coerce").fillna(0)
 
     # Chart_4: Spread by client/month
     df4 = _read(buf, "Chart_4", ["Spread", "Cliente", "Periodo"])
