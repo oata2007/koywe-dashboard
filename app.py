@@ -197,41 +197,51 @@ with st.sidebar:
     # Estado de Google Drive
     if _DRIVE_FOLDER_ID:
         if _drive_metrics_ready:
-            st.success("📡 Datos cargados desde Drive", icon="✅")
+            st.success("📡 Datos desde Drive", icon="✅")
+            if st.button("🔄 Actualizar desde Drive", use_container_width=True):
+                for _k in ["drive_loaded", "drive_charts"]:
+                    st.session_state.pop(_k, None)
+                for _p in [_DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP]:
+                    if os.path.exists(_p):
+                        os.remove(_p)
+                st.cache_data.clear()
+                st.rerun()
+            st.divider()
+            with st.expander("📂 Subir archivo manualmente (override)"):
+                st.markdown(
+                    f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>OTC Metrics</p>",
+                    unsafe_allow_html=True,
+                )
+                uploaded = st.file_uploader(
+                    "Chart_1/2/4/11 (.xlsx)", type=["xlsx"],
+                    label_visibility="collapsed", key="upload_main",
+                )
+                st.markdown(
+                    f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>OTC Charts</p>",
+                    unsafe_allow_html=True,
+                )
+                uploaded_tx = st.file_uploader(
+                    "Chart_14 (.xlsx)", type=["xlsx"],
+                    label_visibility="collapsed", key="upload_tx",
+                )
         else:
-            st.warning("⚠️ No se pudo conectar con Drive")
-
-        if st.button("🔄 Actualizar desde Drive", use_container_width=True):
-            # Forzar re-descarga borrando caché de sesión y archivos tmp
-            for _k in ["drive_loaded", "drive_charts", "drive_metrics_id", "drive_charts_id"]:
-                st.session_state.pop(_k, None)
-            for _p in [_DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP]:
-                if os.path.exists(_p):
-                    os.remove(_p)
-            st.cache_data.clear()
-            st.rerun()
-
-        st.divider()
-        with st.expander("📂 Subir archivo manualmente (override)"):
+            # Drive falló → mostrar uploaders directamente
+            st.warning("⚠️ Drive no disponible — sube el archivo manualmente")
             st.markdown(
-                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>OTC Metrics</p>",
+                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px'>📂 OTC Metrics</p>",
                 unsafe_allow_html=True,
             )
             uploaded = st.file_uploader(
-                "Chart_1/2/4/11 (.xlsx)",
-                type=["xlsx"],
-                label_visibility="collapsed",
-                key="upload_main",
+                "Exportación Mongo — Chart_1/2/4/11 (.xlsx)", type=["xlsx"],
+                label_visibility="collapsed", key="upload_main",
             )
             st.markdown(
-                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>OTC Charts</p>",
+                f"<p style='color:{LIMA_3};font-size:11px;margin-bottom:4px;margin-top:8px'>📂 OTC Charts</p>",
                 unsafe_allow_html=True,
             )
             uploaded_tx = st.file_uploader(
-                "Chart_14 (.xlsx)",
-                type=["xlsx"],
-                label_visibility="collapsed",
-                key="upload_tx",
+                "Exportación Mongo — Chart_14 (.xlsx)", type=["xlsx"],
+                label_visibility="collapsed", key="upload_tx",
             )
     else:
         # Sin Drive configurado → uploaders normales
@@ -276,10 +286,9 @@ if not _has_metrics:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown(_logo_svg(KOYWE_GREEN, height=40), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
+        st.info("📂 **Sube el archivo de exportación** desde el panel izquierdo para cargar el dashboard.")
         if _DRIVE_FOLDER_ID:
-            st.error("❌ No se pudo descargar el archivo de métricas desde Drive. Revisa que la carpeta esté compartida con la service account.")
-        else:
-            st.info("📂 **Sube el archivo de exportación** desde el panel izquierdo para cargar el dashboard.")
+            st.caption("⚠️ La descarga desde Drive falló. Sube el archivo manualmente o revisa que la carpeta esté compartida con la service account.")
     st.stop()
 
 @st.cache_data(show_spinner=False)
