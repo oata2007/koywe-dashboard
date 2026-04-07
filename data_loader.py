@@ -132,23 +132,19 @@ def sync_drive_folder(folder_id: str,
             if not ok:
                 continue
 
-            # Inspeccionar hojas y verificar que tengan datos reales
+            # Detectar tipo de archivo leyendo las primeras filas con pandas
+            chart1_has_data  = False
+            chart14_has_data = False
             try:
-                wb = openpyxl.load_workbook(_tmp, read_only=True)
-                sheets = wb.sheetnames
-
-                def _has_data(ws) -> bool:
-                    """True si la hoja tiene al menos una fila de datos (fila 3+)."""
-                    for row in ws.iter_rows(min_row=3, max_row=5, values_only=True):
-                        if any(v is not None for v in row):
-                            return True
-                    return False
-
-                chart1_has_data  = "Chart_1"  in sheets and _has_data(wb["Chart_1"])
-                chart14_has_data = "Chart_14" in sheets and _has_data(wb["Chart_14"])
-                wb.close()
+                xl = pd.ExcelFile(_tmp)
+                if "Chart_1" in xl.sheet_names:
+                    df_check = xl.parse("Chart_1", header=1, nrows=3)
+                    chart1_has_data = len(df_check) > 0
+                if "Chart_14" in xl.sheet_names:
+                    df_check = xl.parse("Chart_14", header=1, nrows=3)
+                    chart14_has_data = len(df_check) > 0
             except Exception:
-                continue
+                pass
 
             is_metrics = chart1_has_data  and not result["metrics"]
             is_charts  = chart14_has_data and not result["charts"]
