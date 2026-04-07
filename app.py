@@ -276,8 +276,8 @@ if not _has_metrics:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown(_logo_svg(KOYWE_GREEN, height=40), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-        if _DRIVE_METRICS_ID:
-            st.error("❌ No se pudo descargar el archivo de métricas desde Drive. Revisa que el archivo esté compartido con la service account.")
+        if _DRIVE_FOLDER_ID:
+            st.error("❌ No se pudo descargar el archivo de métricas desde Drive. Revisa que la carpeta esté compartida con la service account.")
         else:
             st.info("📂 **Sube el archivo de exportación** desde el panel izquierdo para cargar el dashboard.")
     st.stop()
