@@ -136,9 +136,16 @@ def sync_drive_folder(folder_id: str,
             try:
                 wb = openpyxl.load_workbook(_tmp, read_only=True)
                 sheets = wb.sheetnames
-                # Una hoja "tiene datos" si tiene más de 2 filas (header + al menos 1 dato)
-                chart1_has_data  = "Chart_1"  in sheets and (wb["Chart_1"].max_row  or 0) > 2
-                chart14_has_data = "Chart_14" in sheets and (wb["Chart_14"].max_row or 0) > 2
+
+                def _has_data(ws) -> bool:
+                    """True si la hoja tiene al menos una fila de datos (fila 3+)."""
+                    for row in ws.iter_rows(min_row=3, max_row=5, values_only=True):
+                        if any(v is not None for v in row):
+                            return True
+                    return False
+
+                chart1_has_data  = "Chart_1"  in sheets and _has_data(wb["Chart_1"])
+                chart14_has_data = "Chart_14" in sheets and _has_data(wb["Chart_14"])
                 wb.close()
             except Exception:
                 continue
