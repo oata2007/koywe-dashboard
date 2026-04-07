@@ -742,6 +742,14 @@ def load_excel_dashboard(file_bytes: bytes) -> dict:
 
     def _parse_periodo(series: pd.Series) -> pd.Series:
         """Parsea fechas en múltiples formatos: 'Feb-2026', 'Feb 2026', '2026-02', datetime, etc."""
+        # Si ya son datetime (openpyxl las parsea automáticamente en Python 3.14)
+        if pd.api.types.is_datetime64_any_dtype(series):
+            return series.dt.to_period("M").dt.to_timestamp()
+        # Si los valores son objetos datetime de Python
+        sample = series.dropna()
+        if not sample.empty and hasattr(sample.iloc[0], "year"):
+            return pd.to_datetime(series, errors="coerce").dt.to_period("M").dt.to_timestamp()
+        # Intentar múltiples formatos de texto
         for fmt in ["%b-%Y", "%b %Y", "%Y-%m", "%m-%Y", "%B-%Y", "%B %Y"]:
             parsed = pd.to_datetime(series, format=fmt, errors="coerce")
             if parsed.notna().sum() > 0:
