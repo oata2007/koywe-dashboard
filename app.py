@@ -175,6 +175,7 @@ if _DRIVE_FOLDER_ID and "drive_loaded" not in st.session_state:
         _sync = sync_drive_folder(_DRIVE_FOLDER_ID, _DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP)
     st.session_state["drive_loaded"] = _sync["metrics"]
     st.session_state["drive_charts"] = _sync["charts"]
+    st.session_state["drive_sync_log"] = f"metrics={_sync['metrics']} charts={_sync['charts']}"
 
 _drive_metrics_ready = (
     st.session_state.get("drive_loaded", False)
@@ -196,6 +197,8 @@ with st.sidebar:
 
     # Estado de Google Drive
     if _DRIVE_FOLDER_ID:
+        if st.session_state.get("drive_sync_log"):
+            st.caption(f"🔍 {st.session_state['drive_sync_log']}")
         if _drive_metrics_ready:
             st.success("📡 Datos desde GH", icon="✅")
             if st.button("🔄 Actualizar desde GH", use_container_width=True):
