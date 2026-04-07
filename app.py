@@ -197,8 +197,8 @@ with st.sidebar:
     # Estado de Google Drive
     if _DRIVE_FOLDER_ID:
         if _drive_metrics_ready:
-            st.success("📡 Datos desde Drive", icon="✅")
-            if st.button("🔄 Actualizar desde Drive", use_container_width=True):
+            st.success("📡 Datos desde GH", icon="✅")
+            if st.button("🔄 Actualizar desde GH", use_container_width=True):
                 for _k in ["drive_loaded", "drive_charts"]:
                     st.session_state.pop(_k, None)
                 for _p in [_DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP]:
