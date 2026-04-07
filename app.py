@@ -27,7 +27,7 @@ def _subprocess_env() -> dict:
 from data_loader import (
     load_excel_dashboard, client_analysis_excel,
     load_client_names, load_weekly_summary, load_canal_monthly,
-    download_drive_file,
+    download_drive_file, sync_drive_folder,
     MONTHS_ES, QUARTERS, COUNTRY_MAP_CODE,
 )
 
@@ -166,22 +166,15 @@ def chart_defaults(fig, height=260):
 
 
 # ── Auto-descarga desde Google Drive ──────────────────────────────────────────
-_DRIVE_METRICS_ID  = st.secrets.get("DRIVE_METRICS_ID", "")
-_DRIVE_CHARTS_ID   = st.secrets.get("DRIVE_CHARTS_ID", "")
+_DRIVE_FOLDER_ID   = st.secrets.get("DRIVE_FOLDER_ID", "")
 _DRIVE_METRICS_TMP = "/tmp/koywe_drive_metrics.xlsx"
 _DRIVE_CHARTS_TMP  = "/tmp/koywe_drive_charts.xlsx"
 
-if _DRIVE_METRICS_ID and "drive_loaded" not in st.session_state:
-    with st.spinner("📡 Cargando datos desde Google Drive…"):
-        _ok_m = download_drive_file(_DRIVE_METRICS_ID, _DRIVE_METRICS_TMP)
-        _ok_c = (
-            download_drive_file(_DRIVE_CHARTS_ID, _DRIVE_CHARTS_TMP)
-            if _DRIVE_CHARTS_ID else False
-        )
-    st.session_state["drive_loaded"]  = _ok_m
-    st.session_state["drive_charts"]  = _ok_c
-    st.session_state["drive_metrics_id"] = _DRIVE_METRICS_ID
-    st.session_state["drive_charts_id"]  = _DRIVE_CHARTS_ID
+if _DRIVE_FOLDER_ID and "drive_loaded" not in st.session_state:
+    with st.spinner("📡 Sincronizando datos desde Google Drive…"):
+        _sync = sync_drive_folder(_DRIVE_FOLDER_ID, _DRIVE_METRICS_TMP, _DRIVE_CHARTS_TMP)
+    st.session_state["drive_loaded"] = _sync["metrics"]
+    st.session_state["drive_charts"] = _sync["charts"]
 
 _drive_metrics_ready = (
     st.session_state.get("drive_loaded", False)
@@ -202,7 +195,7 @@ with st.sidebar:
     st.divider()
 
     # Estado de Google Drive
-    if _DRIVE_METRICS_ID:
+    if _DRIVE_FOLDER_ID:
         if _drive_metrics_ready:
             st.success("📡 Datos cargados desde Drive", icon="✅")
         else:

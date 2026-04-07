@@ -65,30 +65,26 @@ def _get_gc():
     return gspread.authorize(creds)
 
 
+def _drive_creds():
+    """Retorna credenciales de Drive con token activo."""
+    from google.auth.transport.requests import Request as GRequest
+    creds_dict = dict(st.secrets["gcp_service_account"])
+    creds = Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/drive.readonly"],
+    )
+    creds.refresh(GRequest())
+    return creds
+
+
 def download_drive_file(file_id: str, dest_path: str) -> bool:
-    """
-    Descarga un archivo de Google Drive a dest_path usando la service account.
-    El archivo en Drive debe estar compartido con el email de la service account.
-    Retorna True si la descarga fue exitosa.
-    """
+    """Descarga un archivo de Google Drive a dest_path. Retorna True si fue exitoso."""
     try:
         import requests as req
-        from google.auth.transport.requests import Request as GRequest
-
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(
-            creds_dict,
-            scopes=["https://www.googleapis.com/auth/drive.readonly"],
-        )
-        creds.refresh(GRequest())
-
+        creds = _drive_creds()
         url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
-        r = req.get(
-            url,
-            headers={"Authorization": f"Bearer {creds.token}"},
-            stream=True,
-            timeout=60,
-        )
+        r = req.get(url, headers={"Authorization": f"Bearer {creds.token}"},
+                    stream=True, timeout=60)
         if r.status_code == 200:
             with open(dest_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=32768):
@@ -97,6 +93,76 @@ def download_drive_file(file_id: str, dest_path: str) -> bool:
         return False
     except Exception:
         return False
+
+
+def sync_drive_folder(folder_id: str,
+                      dest_metrics: str = "/tmp/koywe_drive_metrics.xlsx",
+                      dest_charts:  str = "/tmp/koywe_drive_charts.xlsx") -> dict:
+    """
+    Lista todos los .xlsx en la carpeta de Drive y los clasifica automáticamente:
+      - Archivo con hoja 'Chart_1' → OTC Metrics
+      - Archivo con hoja 'Chart_14' → OTC Charts
+    Descarga los más recientes de cada tipo.
+    Retorna {"metrics": bool, "charts": bool}.
+    """
+    import requests as req
+    import openpyxl
+
+    result = {"metrics": False, "charts": False}
+    try:
+        creds = _drive_creds()
+        headers = {"Authorization": f"Bearer {creds.token}"}
+
+        # Listar xlsx ordenados por fecha de modificación (más reciente primero)
+        q = f"'{folder_id}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' and trashed=false"
+        list_url = "https://www.googleapis.com/drive/v3/files"
+        resp = req.get(list_url, headers=headers,
+                       params={"q": q, "orderBy": "modifiedTime desc",
+                               "fields": "files(id,name,modifiedTime)", "pageSize": 20},
+                       timeout=30)
+        files = resp.json().get("files", [])
+
+        for f in files:
+            if result["metrics"] and result["charts"]:
+                break  # Ya tenemos los dos, no seguir descargando
+
+            # Descargar a un tmp temporal para inspeccionar
+            _tmp = f"/tmp/_drive_inspect_{f['id']}.xlsx"
+            ok = download_drive_file(f["id"], _tmp)
+            if not ok:
+                continue
+
+            # Inspeccionar hojas sin cargar todo el archivo
+            try:
+                wb = openpyxl.load_workbook(_tmp, read_only=True)
+                sheets = wb.sheetnames
+                wb.close()
+            except Exception:
+                continue
+
+            is_metrics = "Chart_1" in sheets and not result["metrics"]
+            is_charts  = "Chart_14" in sheets and not result["charts"]
+
+            if is_metrics:
+                import shutil
+                shutil.copy(_tmp, dest_metrics)
+                result["metrics"] = True
+
+            if is_charts:
+                import shutil
+                shutil.copy(_tmp, dest_charts)
+                result["charts"] = True
+
+            try:
+                import os as _os
+                _os.remove(_tmp)
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
+    return result
 
 
 # ── Raw sheet loader ──────────────────────────────────────────────────────────
