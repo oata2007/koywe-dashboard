@@ -1,0 +1,14 @@
+# Secrets — NUNCA subir a GitHub
+.streamlit/secrets.toml
+
+# Archivos temporales
+/tmp/
+*.pyc
+__pycache__/
+.DS_Store
+
+# Datos sensibles
+data/*.xlsx
+data/*.csv
+*.xlsx
+*.csv
